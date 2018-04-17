@@ -221,6 +221,11 @@ namespace OpenMined.Syft.Tensor
                   this.Eq(other, inline: true);
                   return this.id + "";
                 }
+                case "exp":
+                {
+                  var result = this.Exp();
+                  return result.id + "";
+                }
                 case "cos":
                 {
                     var result = Cos();
@@ -366,7 +371,11 @@ namespace OpenMined.Syft.Tensor
                     var result = Sqrt();
                     return result.Id + "";
                 }
-
+                case "rsqrt":
+                {
+                    var result = Rsqrt();
+                    return result.Id + "";   
+                }
                 case "sin":
                 {
                      var result = Sin();
@@ -459,6 +468,26 @@ namespace OpenMined.Syft.Tensor
                     }
                     View(new_dims, inline: true);
                     return Id.ToString();
+                }
+
+                case "unfold":
+                {
+                    int dim = int.Parse (msgObj.tensorIndexParams [0]);
+                    int size = int.Parse (msgObj.tensorIndexParams [1]);
+                    int step = int.Parse (msgObj.tensorIndexParams [2]);
+                    
+                    var result = Unfold (dim, size, step);
+                    return result.Id.ToString ();
+                }
+
+                case "unfold_":
+                {
+                    int dim = int.Parse (msgObj.tensorIndexParams [0]);
+                    int size = int.Parse (msgObj.tensorIndexParams [1]);
+                    int step = int.Parse (msgObj.tensorIndexParams [2]);
+                    
+                    Unfold (dim, size, step, true);
+                    return Id.ToString ();
                 }
                 
                 case "to_numpy_by_proto":

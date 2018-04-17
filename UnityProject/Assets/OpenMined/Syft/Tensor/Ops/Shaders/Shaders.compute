@@ -44,6 +44,15 @@ void Acos_ (uint3 id: SV_DispatchThreadID) {
     AcosData_[id.x] = acos(AcosData_[id.x]);
 }
 
+#pragma kernel AcosInt
+StructuredBuffer<int> AcosIntData;
+RWStructuredBuffer<float> AcosIntDataResult;
+
+[numthreads(4,1,1)]
+void AcosInt (uint3 id: SV_DispatchThreadID) {
+    AcosIntDataResult[id.x] = acos(AcosIntData[id.x]);
+}
+
 #pragma kernel Asin
 
 StructuredBuffer<float> AsinData;
@@ -206,8 +215,8 @@ void AddMMT_ (uint3 id : SV_DispatchThreadID) {
 	int N = AddmmtDimensionsN_[0];
 	int O = AddmmtDimensionsO_[0];
 
-	int j = id % O;
-	int i = (id - j) / M;
+	int j = id.x % O;
+	int i = (id.x - j) / M;
 	int Bid = i * N;
 	int Cid = j * N;
 	for (int l = 0; l < N; l++)
@@ -231,6 +240,43 @@ void AddMV_ (uint3 id : SV_DispatchThreadID){
 	for (int i = 0; i < refShape; i++){
 		AddMVRefData[id.x] += AddMVVectorData[i] * AddMVMatrixData[i + (id.x * refShape)];
 	}
+}
+
+#pragma kernel Addr
+
+StructuredBuffer<int> AddrStride;
+StructuredBuffer<float> AddrBeta;
+StructuredBuffer<float> AddrAlpha;
+StructuredBuffer<float> AddrMatrix;
+StructuredBuffer<float> AddrVec1;
+StructuredBuffer<float> AddrVec2;
+RWStructuredBuffer<float> AddrResult;
+
+[numthreads(4,1,1)]
+void Addr (uint3 id : SV_DispatchThreadID){
+	int stride = AddrStride[0];
+	int col = (int) id.x % stride;
+	int row = (int) (id.x - col) / stride;
+	AddrResult[id.x] = AddrBeta[0]*AddrMatrix[id.x]
+		+ AddrAlpha[0]*AddrVec1[row]*AddrVec2[col];
+}
+
+#pragma kernel Addr_
+
+StructuredBuffer<int> AddrStride_;
+StructuredBuffer<float> AddrBeta_;
+StructuredBuffer<float> AddrAlpha_;
+RWStructuredBuffer<float> AddrMatrix_;
+StructuredBuffer<float> AddrVec1_;
+StructuredBuffer<float> AddrVec2_;
+
+[numthreads(4,1,1)]
+void Addr_ (uint3 id : SV_DispatchThreadID){
+	int stride = AddrStride_[0];
+	int col = (int) id.x % stride;
+	int row = (int) (id.x - col) / stride;
+	AddrMatrix_[id.x] = AddrBeta_[0]*AddrMatrix_[id.x]
+		+ AddrAlpha_[0]*AddrVec1_[row]*AddrVec2_[col];
 }
 
 #pragma kernel Ceil
@@ -939,7 +985,8 @@ StructuredBuffer<int> TransposeDim1;
 StructuredBuffer<int> TransposeDim2;
 StructuredBuffer<float> TransposeData;
 StructuredBuffer<int> TransposeShape;
-StructuredBuffer<int> TransposeStrides;
+StructuredBuffer<int> TransposeStridesIn;
+StructuredBuffer<int> TransposeStridesOut;
 RWStructuredBuffer<float> TransposeResult;
 
 [numthreads(4,1,1)]
@@ -947,15 +994,15 @@ void Transpose (uint3 id: SV_DispatchThreadID) {
 	int indices[10];
 	int idx = id.x;
 	for (int i = 0; i < TransposeDims[0]; i++) {
-		indices[i] = (idx - (idx % (TransposeStrides[i]))) / TransposeStrides[i];
-		idx -= indices[i] * TransposeStrides[i];
+		indices[i] = (idx - (idx % TransposeStridesOut[i])) / TransposeStridesOut[i];
+		idx -= indices[i] * TransposeStridesOut[i];
 	}
 	int tmp = indices[TransposeDim1[0]];
 	indices[TransposeDim1[0]] = indices[TransposeDim2[0]];
 	indices[TransposeDim2[0]] = tmp;
 	int offset = 0;
 	for (int i = 0; i < TransposeDims[0]; i++) {
-		offset += indices[i] * TransposeStrides[i];
+		offset += indices[i] * TransposeStridesIn[i];
 	}
 	TransposeResult[id.x] = TransposeData[offset];
 }
@@ -998,4 +1045,29 @@ RWStructuredBuffer<float> ZeroData_;
 [numthreads(4,1,1)]
 void Zero_ (uint3 id: SV_DispatchThreadID) {
        ZeroData_[id.x] = 0;
+}
+
+#pragma kernel UnfoldInt
+
+StructuredBuffer<int> UnfoldIntData;
+StructuredBuffer<int> UnfoldIntSizeBeforeDim;
+StructuredBuffer<int> UnfoldIntSizeAfterDim;
+StructuredBuffer<int> UnfoldIntDimSize;
+StructuredBuffer<int> UnfoldIntSize;
+StructuredBuffer<int> UnfoldIntStep;
+RWStructuredBuffer<int> UnfoldIntResult;
+
+[numthreads(4, 1, 1)]
+void UnfoldInt(uint3 id: SV_DispatchThreadID)
+{
+	int currentStep = (id.x/(UnfoldIntSizeBeforeDim[0] * UnfoldIntSize[0] * UnfoldIntSizeAfterDim[0]));
+	int updatedIndex = (id.x % (UnfoldIntSizeBeforeDim[0] * UnfoldIntSize[0] * UnfoldIntSizeAfterDim[0]));
+	int stepOffset = currentStep * UnfoldIntSizeAfterDim[0] * UnfoldIntStep[0];
+
+	int sizeIndex = updatedIndex/(UnfoldIntSize[0] * UnfoldIntSizeAfterDim[0]);
+	int sizeOffset = sizeIndex * (UnfoldIntDimSize[0] - UnfoldIntSize[0]) * UnfoldIntSizeAfterDim[0];
+
+	int indexToQuery = updatedIndex + stepOffset + sizeOffset;
+
+	UnfoldIntResult[id.x] = UnfoldIntData[indexToQuery];
 }

@@ -19,6 +19,8 @@ namespace OpenMined.Syft.Tensor
         [SerializeField] private static int AddMMKernel_;
         [SerializeField] private static int AddMMTKernel_;
         [SerializeField] private static int AddMVKernel_;
+        [SerializeField] private static int AddrKernel;
+        [SerializeField] private static int AddrKernel_;
         [SerializeField] private static int CeilKernel;
         [SerializeField] private static int CeilKernel_;
         [SerializeField] private static int CopyBufferKernel;
@@ -100,6 +102,8 @@ namespace OpenMined.Syft.Tensor
             AddMMKernel_ = shader.FindKernel("AddMM_");
             AddMMTKernel_ = shader.FindKernel("AddMMT_");
             AddMVKernel_ = shader.FindKernel("AddMV_");
+            AddrKernel = shader.FindKernel("Addr");
+            AddrKernel_ = shader.FindKernel("Addr_");
             CeilKernel = shader.FindKernel("Ceil");
             CeilKernel_ = shader.FindKernel("Ceil_");
             CopyBufferKernel = shader.FindKernel("CopyBuffer");
@@ -166,7 +170,7 @@ namespace OpenMined.Syft.Tensor
 
         public FloatTensor AbsGPU(FloatTensor result)
         {
-            Debug.LogFormat("<color=blue>FloatTensor.AbsGPU dataOnGpu: {0}</color>", dataOnGpu);
+//            Debug.LogFormat("<color=blue>FloatTensor.AbsGPU dataOnGpu: {0}</color>", dataOnGpu);
             if (dataOnGpu)
             {
                 shader.SetBuffer(AbsKernel, "AbsData", dataBuffer);
@@ -295,7 +299,7 @@ namespace OpenMined.Syft.Tensor
                     shader.SetBuffer(AddElemKernel, "AddElemDataA", this.DataBuffer);
                     shader.SetBuffer(AddElemKernel, "AddElemDataB", tensor.DataBuffer);
                     shader.SetBuffer(AddElemKernel, "AddElemDataResult", result.DataBuffer);
-                    
+
                     shader.Dispatch(AddElemKernel, this.size, 1, 1);
                 }
                 else
@@ -470,6 +474,51 @@ namespace OpenMined.Syft.Tensor
             shader.SetBuffer(AddMVKernel_, "AddMVVectorData", vector.DataBuffer);
             shader.Dispatch(AddMVKernel_, this.Size, 1, 1);
             refShapeBuffer.Release();
+        }
+
+        public FloatTensor AddrGPU(float beta, FloatTensor vec1, FloatTensor vec2, float alpha)
+        {
+          Debug.LogFormat("<color=blue>FloatTensor.AddrGPU dataOnGpu: {0}</color>", dataOnGpu);
+
+          var result = this.emptyTensorCopy();
+
+          var strideBuffer = SendIntToGpu(AddrKernel, this.shape[1], "AddrStride");
+          var betaBuffer = SendFloatToGpu(AddrKernel, beta, "AddrBeta");
+          var alphaBuffer = SendFloatToGpu(AddrKernel, alpha, "AddrAlpha");
+
+          // associate arrays with gpu
+          shader.SetBuffer(AddrKernel, "AddrMatrix", dataBuffer);
+          shader.SetBuffer(AddrKernel, "AddrVec1", vec1.DataBuffer);
+          shader.SetBuffer(AddrKernel, "AddrVec2", vec2.DataBuffer);
+          shader.SetBuffer(AddrKernel, "AddrResult", result.DataBuffer);
+
+          // launch kernel
+          shader.Dispatch(AddrKernel, size, 1, 1);
+
+          strideBuffer.Release();
+          betaBuffer.Release();
+          alphaBuffer.Release();
+
+          return result;
+        }
+
+        public void AddrGPU_(float beta, FloatTensor vec1, FloatTensor vec2, float alpha)
+        {
+          var strideBuffer = SendIntToGpu(AddrKernel_, shape[1], "AddrStride_");
+          var betaBuffer = SendFloatToGpu(AddrKernel_, beta, "AddrBeta_");
+          var alphaBuffer = SendFloatToGpu(AddrKernel_, alpha, "AddrAlpha_");
+
+          // associate arrays with gpu
+          shader.SetBuffer(AddrKernel_, "AddrMatrix_", dataBuffer);
+          shader.SetBuffer(AddrKernel_, "AddrVec1_", vec1.DataBuffer);
+          shader.SetBuffer(AddrKernel_, "AddrVec2_", vec2.DataBuffer);
+
+          // launch kernel
+          shader.Dispatch(AddrKernel_, size, 1, 1);
+
+          strideBuffer.Release();
+          betaBuffer.Release();
+          alphaBuffer.Release();
         }
 
         public void CeilGPU_()
@@ -1055,7 +1104,7 @@ namespace OpenMined.Syft.Tensor
             // 3. copy to cpu and sum over groups -> trace
             float[] resultPerGroup = new float[numgroups];
             resultPerGroupBuffer.GetData(resultPerGroup);
-            UnityEngine.Debug.Log(resultPerGroup[0]);
+//            Debug.Log(resultPerGroup[0]);
 
             float sum = 0;
             foreach (var item in resultPerGroup)
@@ -1090,36 +1139,25 @@ namespace OpenMined.Syft.Tensor
             var inttest = new int[result.size];
             var floattest = new float[result.size];
             dataBuffer.GetData(floattest);
-            Debug.LogFormat("DataBuffer: {0}", string.Join(",",floattest));
             shapeBuffer.GetData(inttest);
-            Debug.LogFormat("shapeBuffer: {0}", string.Join(",", inttest));
             result.ShapeBuffer.GetData(inttest);
-            Debug.LogFormat("resultShapeBuffer: {0}", string.Join(",", inttest));
             stridesBuffer.GetData(inttest);
-            Debug.LogFormat("stridesBuffer: {0}", string.Join(",", inttest));
             result.StridesBuffer.GetData(inttest);
-            Debug.LogFormat("resultStridesBuffer: {0}", string.Join(",", inttest));
-
 
             var dimBuffer = SendIntToGpu(TransposeKernel, Shape.Length, "TransposeDims");
             var dim1Buffer = SendIntToGpu(TransposeKernel, dim1, "TransposeDim1");
             var dim2Buffer = SendIntToGpu(TransposeKernel, dim2, "TransposeDim2");
-            var indicesBuffer = new ComputeBuffer(strides.Length, sizeof(int));
-//            indicesBuffer.SetData(new int[Shape.Length]);
 
             shader.SetBuffer(TransposeKernel, "TransposeData", DataBuffer);
             shader.SetBuffer(TransposeKernel, "TransposeShape", result.shapeBuffer);
-//            shader.SetBuffer(TransposeKernel, "TransposeShape", shapeBuffer);
-            shader.SetBuffer(TransposeKernel, "TransposeStrides", result.StridesBuffer);
-//            shader.SetBuffer(TransposeKernel, "TransposeStrides", StridesBuffer);
-            shader.SetBuffer(TransposeKernel, "TransposeIndices", indicesBuffer);
+            shader.SetBuffer(TransposeKernel, "TransposeStridesIn", StridesBuffer);
+            shader.SetBuffer(TransposeKernel, "TransposeStridesOut", result.StridesBuffer);
             shader.SetBuffer(TransposeKernel, "TransposeResult", result.DataBuffer);
             shader.Dispatch(TransposeKernel, this.size, 1, 1);
 
             dimBuffer.Release();
             dim1Buffer.Release();
             dim2Buffer.Release();
-            indicesBuffer.Release();
 
             return result;
         }

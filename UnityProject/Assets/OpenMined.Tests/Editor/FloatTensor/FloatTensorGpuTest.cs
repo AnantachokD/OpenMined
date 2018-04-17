@@ -1,21 +1,18 @@
 using System;
 using UnityEngine;
-using UnityEditor;
 using NUnit.Framework;
 using OpenMined.Network.Controllers;
-using OpenMined.Syft.Tensor;
 using OpenMined.Network.Servers;
-using UnityEditor.VersionControl;
 
-namespace OpenMined.Tests.Editor.FloatTensorTests
+namespace OpenMined.Tests.Tensor.FloatTensor
 {
-    [Category("FloatTensorGPUTests")]
-    public class FloatTensorGPUTest
+    [Category("GPUTest")]
+    public class GPUTest
     {
         public SyftController ctrl;
         public ComputeShader shader;
 
-        public void AssertEqualTensorsData(OpenMined.Syft.Tensor.FloatTensor t1, OpenMined.Syft.Tensor.FloatTensor t2, double delta = 0.0d)
+        public void AssertEqualTensorsData(Syft.Tensor.FloatTensor t1, Syft.Tensor.FloatTensor t2, double delta = 0.0d)
         {
             float[] data1 = new float[t1.Size];
             t1.DataBuffer.GetData(data1);
@@ -277,9 +274,6 @@ namespace OpenMined.Tests.Editor.FloatTensorTests
             tensor1.Gpu(shader);
             tensor2.Gpu(shader);
 
-            Debug.LogFormat("T2 transposed{0}", tensor2.Transpose().Print());
-            Debug.LogFormat("T2 {0}", tensor2.Print());
-
             base1.AddMMT(tensor1, tensor2.Transpose());
             base2.AddMMT(tensor2, tensor1.Transpose());
 
@@ -348,6 +342,71 @@ namespace OpenMined.Tests.Editor.FloatTensorTests
             expectedVector.Gpu(shader);
 
             AssertEqualTensorsData(expectedVector, baseVector);
+        }
+
+        [Test]
+        public void Addr()
+        {
+
+          float[] data1 = {1, 2, 3, 4};
+          int[] shape1 = new int[] {2, 2};
+          var matrix = ctrl.floatTensorFactory.Create(_data: data1, _shape: shape1);
+          matrix.Gpu(shader);
+
+          float beta = 2;
+          float alpha = 3;
+
+          float[] data2 = new float[] {1, 2};
+          int[] shape2 = new int[] {2};
+          var vec1 = ctrl.floatTensorFactory.Create(_data: data2, _shape: shape2);
+          vec1.Gpu(shader);
+
+          float[] data3 = new float[] {3, 4};
+          int[] shape3 = new int[] {2};
+          var vec2 = ctrl.floatTensorFactory.Create(_data: data3, _shape: shape3);
+          vec2.Gpu(shader);
+
+          var result = matrix.Addr(beta, vec1, vec2, alpha);
+
+          float[] expectedData = new float[] {11, 16, 24, 32};
+          int[] expectedShape = new int[] {2, 2};
+          var expectedMatrix = ctrl.floatTensorFactory.Create(_data: expectedData, _shape: expectedShape);
+          expectedMatrix.Gpu(shader);
+
+          AssertEqualTensorsData(expectedMatrix, result);
+
+        }
+
+        [Test]
+        public void Addr_()
+        {
+
+          float[] data1 = {1, 2, 3, 4};
+          int[] shape1 = new int[] {2, 2};
+          var mat = ctrl.floatTensorFactory.Create(_data: data1, _shape: shape1);
+          mat.Gpu(shader);
+
+          float beta = 2;
+          float alpha = 3;
+
+          float[] data2 = new float[] {1, 2};
+          int[] shape2 = new int[] {2};
+          var vec1 = ctrl.floatTensorFactory.Create(_data: data2, _shape: shape2);
+          vec1.Gpu(shader);
+
+          float[] data3 = new float[] {3, 4};
+          int[] shape3 = new int[] {2};
+          var vec2 = ctrl.floatTensorFactory.Create(_data: data3, _shape: shape3);
+          vec2.Gpu(shader);
+
+          mat.Addr(beta, vec1, vec2, alpha, inline: true);
+
+          float[] expectedData = new float[] {11, 16, 24, 32};
+          int[] expectedShape = new int[] {2, 2};
+          var expectedMatrix = ctrl.floatTensorFactory.Create(_data: expectedData, _shape: expectedShape);
+          expectedMatrix.Gpu(shader);
+
+          AssertEqualTensorsData(expectedMatrix, mat);
         }
 
         [Test]
@@ -867,7 +926,7 @@ namespace OpenMined.Tests.Editor.FloatTensorTests
                 Assert.AreEqual(expectedTensor[i], tensor1[i]);
             }
         }
-      
+
         [Test]
         public void Exp()
         {
@@ -938,7 +997,7 @@ namespace OpenMined.Tests.Editor.FloatTensorTests
 
             AssertEqualTensorsData(expectedTensor, tensor1);
         }
-      
+
         [Test]
         public void Log1p()
         {
@@ -1949,8 +2008,6 @@ namespace OpenMined.Tests.Editor.FloatTensorTests
             transpose.Gpu(shader);
 
             var transposed = tensor.Transpose();
-            Debug.LogFormat("In: {0}", tensor.Print());
-            Debug.LogFormat("Out: {0}", transposed.Print());
             AssertEqualTensorsData(transpose, transposed);
         }
 
@@ -1970,8 +2027,6 @@ namespace OpenMined.Tests.Editor.FloatTensorTests
             transpose.Gpu(shader);
 
             var transposed = tensor.Transpose(0, 2);
-            Debug.LogFormat("In: {0}", tensor.Print());
-            Debug.LogFormat("Out: {0}", transposed.Print());
 
             AssertEqualTensorsData(transpose, transposed);
         }
